@@ -149,30 +149,22 @@ def download_video_and_process(pl_title, url):
         f'metadata:s:s:{i}': f'language={v}' for i, v in enumerate(paths['subtitles'])
     }
 
-    video = ffmpeg.input(paths['video'])
-    
-    # we need to get the video and audio streams separately
-    # https://github.com/kkroening/ffmpeg-python/issues/26
-    # problem is that once we call filter it not longer maps
-    # other streams (audio) to the output
-    video_stream = video['v']
-    audio_stream = video['a']
+    video = ffmpeg.input(paths['video']) # This is either just video or video with audio
     thumbnail = ffmpeg.input(paths['thumbnail'])['v']
     subtitles = [ffmpeg.input(x)['s'] for x in paths['subtitles'].values()]
 
     ffmpeg_output = os.path.join(temp, f'{id}.mp4')
-    out = ffmpeg.output(video_stream, audio_stream, thumbnail, *subtitles,  # Input streams
-            ffmpeg_output,                 # Output file
-            acodec='copy',                    # Copy audio streams without re-encoding
-            scodec='mov_text',                # Encode the subtitle stream as mov_text
+    out = ffmpeg.output(video, thumbnail, *subtitles,  # Input streams
+            ffmpeg_output,                  # Output file
+            acodec='copy',                  # Copy audio streams without re-encoding
+            vcodec='copy',                  # Copy video streams without re-encoding
+            scodec='mov_text',              # Encode the subtitle stream as mov_text
             **{
-                'c:v:0': 'copy',             # Encode the video stream as H.265
-                'c:v:1': 'copy',                # Keep the thumbnail stream as it is
                 'disposition:v:1': 'attached_pic', # Set the image stream as an attached picture (thumbnail)
-                'movflags': 'faststart',      # Move the moov atom to the beginning of the file
-                **sub_metadata,               # Set metadata for the subtitle stream
+                'movflags': 'faststart',    # Move the moov atom to the beginning of the file
+                **sub_metadata,             # Set metadata for the subtitle stream
             }
-        ).overwrite_output()                  # Allow overwriting the output file if it exists
+        ).overwrite_output()                # Allow overwriting the output file if it exists
 
     out.run()
 
