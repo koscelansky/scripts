@@ -68,8 +68,8 @@ done
 
 shift $(($OPTIND-1));
 
-input_folder=$1
-output_folder=$2
+input_folder="${1%/}/"
+output_folder="${2%/}/"
 
 # Check if input and output folders are provided
 if [ -z "$input_folder" ] || [ -z "$output_folder" ]; then
@@ -95,27 +95,46 @@ if [ ! -d "$output_folder" ]; then
   mkdir -p $output_folder
 fi
 
-# Find all files in the input folder and subfolders
-find "$input_folder" -type f | while read input_file; do
+# Find all JPEG files in the input folder and subfolders
+find "$input_folder" -type f \( -iname "*.jpg" -o -iname "*.jpeg" \) | while read input_file; do
   # Get the relative path of the file
-  echo "Converting $input_file"
-  relative_input_path=${input_file#"$input_folder/"}
+  echo "Processing $input_file"
+
+  relative_input_path=${input_file#$input_folder}
   
   # Get the output file path
-  output_file="$output_folder/$relative_input_path"
-
+  output_file="$output_folder$relative_input_path"
   output_dir=$(dirname "$output_file")
   
   # Create the output folder
   mkdir -p "$output_dir"
 
+  # Get the current JPEG quality using exiftool
+  current_quality=$(exiftool -JPEGQualityEstimate "$input_file" | awk '{print $NF}')
+  
+  # If the current quality is lower than the selected quality, use it
+  working_quality=$quality
+  if [ "$current_quality" -lt "$working_quality" ]; then
+    working_quality=$current_quality
+  fi
+
+  echo "Convert using quality: $working_quality"
+
   # Convert the image to JPEG
   # Add the --chroma_subsampling 422 flag to use 4:2:2 chroma subsampling
   # it creates smaller files with no visible quality loss to me
-  cjpegli --chroma_subsampling 422 -q $quality "$input_file" "$output_file"
+  cjpegli --chroma_subsampling 422 -q $working_quality "$input_file" "$output_file"
 
-  # Copy the metadata
+    
   # We need to add back the embedded color profile, because cjpegli seems to
   # remove it, with no way of keeping it, so it will render the colors wrong
   exiftool -overwrite_original -TagsFromFile "$input_file" -preserve -all -icc_profile "$output_file"
+
+  # If the output file is larger than the input file, delete it and replace 
+  # input file
+  if [ $(stat -c%s "$output_file") -gt $(stat -c%s "$input_file") ]; then
+    echo "Output file $output_file is larger than input file $input_file. Replacing it with original."
+    rm "$output_file"
+    cp -f "$input_file" "$output_file"
+  fi
 done
