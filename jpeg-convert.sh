@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Simple script to convert all files in input folder, including subfolders, to 
 # JPEG format and save them in output folder. Keeping the same folder structure.
 # It uses jpegli to convert the images and ExifTool to copy the metadata.
@@ -6,17 +8,42 @@
 # Default quality is 78.
 
 # Usage: ./jpeg-convert.sh [-q QUALITY] input_folder output_folder
+print_usage() {
+  echo "Usage: $0 [-q QUALITY] input_folder output_folder"
+  echo "Convert images to JPEG format and save them in output folder."
+  echo "Options:"
+  echo "  -q QUALITY   Set the quality of the output images (1-100). Default is 78."
+  echo "  -h           Show this help message."
+  echo "Example: $0 -q 90 /path/to/input /path/to/output"
 
-# Extract the quality flag if it is set and the folders into variables
+  exit $1
+}
 
-# funtion to print error, usage and exit
 failure() {
-  echo $1 1>&2
-  echo "Usage: $0 [-q QUALITY] input_folder output_folder" 1>&2
+  echo "Error: $1"
   exit 1
 }
 
-while getopts ":q:" opt; do
+# Check if required binaries are available
+if ! command -v cjpegli &> /dev/null; then
+  echo "cjpegli is not installed or not in PATH"
+  echo "You can build it from sources https://github.com/google/jpegli"
+  echo "Or install it using your package manager, for example:"
+  echo "  apt install libjpegli-tools (Ubuntu 24.10)"
+  exit 1
+fi
+
+if ! command -v exiftool &> /dev/null; then
+  echo "exiftool is not installed or not in PATH"
+  echo "You can install it using your package manager, for example:"
+  echo "  apt install libimage-exiftool-perl"
+  echo "Or download it from git"
+  echo "  git clone https://github.com/exiftool/exiftool.git"
+  exit 1
+fi
+
+# Extract parameters and chek if they are valid
+while getopts ":q:h" opt; do
   case ${opt} in
     q)
       quality=$OPTARG
@@ -25,24 +52,35 @@ while getopts ":q:" opt; do
         failure "Invalid quality value: $quality. It must be a number between 1 and 100"
       fi
       ;;
+    h)
+      print_usage 0
+      ;;
     \?)
-      failure "Invalid option: $OPTARG"
+      echo "Invalid option: $OPTARG"
+      print_usage 1
       ;;
     :)
-      failure "Invalid option: $OPTARG requires an argument"
+      failure "Invalid value: $OPTARG requires an argument"
+      print_usage 1
       ;;
   esac
 done
 
 shift $(($OPTIND-1));
 
+input_folder=$1
+output_folder=$2
+
+# Check if input and output folders are provided
+if [ -z "$input_folder" ] || [ -z "$output_folder" ]; then
+  failure "Input and output folders are required"
+  print_usage 1
+fi
+
 # If quality is not set, use the default value
 if [ -z "$quality" ]; then
   quality=78
 fi
-
-input_folder=$1
-output_folder=$2
 
 echo "Converting images from $input_folder to JPEG format and saving them in $output_folder with quality $quality"
 
@@ -64,17 +102,20 @@ find "$input_folder" -type f | while read input_file; do
   relative_input_path=$(realpath --relative-to="$input_folder" "$input_file")
   
   # Get the output file path
-  output_file=$output_folder/$relative_input_path
+  output_file=$output_folder$relative_input_path
+
+  output_dir=$(dirname "$output_file")
+  
   # Create the output folder
-  mkdir -p $(dirname "$output_file")
+  mkdir -p "$output_dir"
 
   # Convert the image to JPEG
   # Add the --chroma_subsampling 422 flag to use 4:2:2 chroma subsampling
-  # it creates smaller files with no visible quality loss me
+  # it creates smaller files with no visible quality loss to me
   cjpegli --chroma_subsampling 422 -q $quality "$input_file" "$output_file"
 
   # Copy the metadata
   # We need to add back the embedded color profile, because cjpegli seems to
-  # removes it, with no way of keeping it, so it will render the colors wrong
+  # remove it, with no way of keeping it, so it will render the colors wrong
   exiftool -overwrite_original -TagsFromFile "$input_file" -preserve -all -icc_profile "$output_file"
 done
