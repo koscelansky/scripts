@@ -98,11 +98,11 @@ fi
 # Find all files in the input folder and subfolders
 find "$input_folder" -type f | while read input_file; do
   # Get the relative path of the file
-  echo "Converting $input_file" 
-  relative_input_path=$(realpath --relative-to="$input_folder" "$input_file")
+  echo "Converting $input_file"
+  relative_input_path=${input_file#"$input_folder/"}
   
   # Get the output file path
-  output_file=$output_folder$relative_input_path
+  output_file="$output_folder/$relative_input_path"
 
   output_dir=$(dirname "$output_file")
   
