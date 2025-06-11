@@ -24,6 +24,14 @@ failure() {
   exit 1
 }
 
+# Function to get the file size in bytes
+# It is this verbose and obscure to work on both GNU (Linux) and BSD (Mac) systems
+# The awk portion is used to remove the leading whitespace from the wc output, because
+# on BSD systems wc -c returns the size with a leading space, while on GNU systems it does not.
+get_filesize() {
+  wc -c "$1" | awk '{$1=$1};1' | cut -d ' ' -f 1
+}
+
 # Check if required binaries are available
 if ! command -v cjpegli &> /dev/null; then
   echo "cjpegli is not installed or not in PATH"
@@ -132,7 +140,7 @@ find "$input_folder" -type f \( -iname "*.jpg" -o -iname "*.jpeg" \) | while rea
 
   # If the output file is larger than the input file, delete it and replace 
   # input file
-  if [ $(stat -c%s "$output_file") -gt $(stat -c%s "$input_file") ]; then
+  if [ $(get_filesize "$output_file") -gt $(get_filesize "$input_file") ]; then
     echo "Output file $output_file is larger than input file $input_file. Replacing it with original."
     rm "$output_file"
     cp -f "$input_file" "$output_file"
