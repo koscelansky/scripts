@@ -68,7 +68,7 @@ while getopts ":q:h" opt; do
       print_usage 1
       ;;
     :)
-      failure "Invalid value: $OPTARG requires an argument"
+      echo "Invalid value: $OPTARG requires an argument"
       print_usage 1
       ;;
   esac
@@ -76,13 +76,18 @@ done
 
 shift $(($OPTIND-1));
 
-input_folder="${1%/}/"
-output_folder="${2%/}/"
+# Input folder is required
+if [ -z "$1" ]; then
+  failure "Input folder is required"
+fi
 
-# Check if input and output folders are provided
-if [ -z "$input_folder" ] || [ -z "$output_folder" ]; then
-  failure "Input and output folders are required"
-  print_usage 1
+input_folder="${1%/}/"
+
+# Output folder is optional. If not provided, default to <input_folder>output
+if [ -z "$2" ]; then
+  output_folder="${input_folder}output/"
+else
+  output_folder="${2%/}/"
 fi
 
 # If quality is not set, use the default value
