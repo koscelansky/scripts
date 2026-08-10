@@ -86,6 +86,10 @@ input_folder="${1%/}/"
 # Output folder is optional. If not provided, default to <input_folder>output
 if [ -z "$2" ]; then
   output_folder="${input_folder}output/"
+  # Refuse a pre-existing default output (likely a previous run) to avoid mixing files
+  if [ -d "$output_folder" ]; then
+    failure "Output folder $output_folder already exists. Remove it or pass an output folder explicitly."
+  fi
 else
   output_folder="${2%/}/"
 fi
@@ -109,7 +113,8 @@ if [ ! -d "$output_folder" ]; then
 fi
 
 # Find all JPEG files in the input folder and subfolders
-find "$input_folder" -type f \( -iname "*.jpg" -o -iname "*.jpeg" \) | while read input_file; do
+# Prune the output folder so we never re-process already-converted files
+find "$input_folder" -type d -path "${output_folder%/}" -prune -o -type f \( -iname "*.jpg" -o -iname "*.jpeg" \) -print | while read input_file; do
   # Get the relative path of the file
   echo "Processing $input_file"
 
